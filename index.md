@@ -4,3 +4,7 @@ This is my [Progress Journal website](https://bu-ie-48b.github.io/fall21-ozturki
 ## Homework Assignments
 
 There will be several homework assignments done for this course.
+
+### HW 1
+[Here](files/Ie48b-hw1.html) is HW1 html file.
+[Code](files/Ie48b-hw1.Rmd)

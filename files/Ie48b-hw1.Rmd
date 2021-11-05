@@ -1,0 +1,653 @@
+---
+title: "IE48B-HW1"
+author: "Irem Ozturk"
+date: "05 11 2021"
+output:
+  html_document:
+    code_folding: hide
+    theme: yeti
+    toc: true
+    toc_depth: 3
+    toc_float: true
+  pdf_document: default
+---
+
+## **Introduction**
+
+Aim of this homework, to visualize the gesture data from 8 users and propose appropriate time series representations. Data is collected as acceleration data in x-y-z axis. 
+
+### **Data Manipulation**
+
+The data is in the wide format, after turning it into the long format, column names are changed and it is ordered according to time series id and time.
+
+```{r , warning=FALSE}
+library(data.table)
+library(ggplot2)
+library(repr)
+library(plot3D)
+library(gridExtra)
+library(TSrepr)
+
+setwd("C:/Users/oztur/OneDrive/Belgeler")
+
+x_data=fread("C:/Users/oztur/OneDrive/Belgeler/uWaveGestureLibrary_X_TRAIN")
+y_data=fread("C:/Users/oztur/OneDrive/Belgeler/uWaveGestureLibrary_y_TRAIN")
+z_data=fread("C:/Users/oztur/OneDrive/Belgeler/uWaveGestureLibrary_z_TRAIN")
+
+## Data manipulation
+x_data[,id:=1:.N]
+setnames(x_data,'V1','class')
+x_data[,class:=as.character(class)]
+
+y_data[,id:=1:.N]
+setnames(y_data,'V1','class')
+y_data[,class:=as.character(class)]
+
+z_data[,id:=1:.N]
+setnames(z_data,'V1','class')
+z_data[,class:=as.character(class)]
+
+long_x=melt(x_data,id.vars=c('id','class'))
+
+long_y=melt(y_data,id.vars=c('id','class'))
+
+long_z=melt(z_data,id.vars=c('id','class'))
+
+long_x[,time:=as.numeric(gsub("\\D", "", variable))-1]
+
+long_y[,time:=as.numeric(gsub("\\D", "", variable))-1]
+
+long_z[,time:=as.numeric(gsub("\\D", "", variable))-1]
+
+
+long_x=long_x[,list(id,class,time,value)]
+long_x=long_x[order(id,time)]
+head(long_x)
+
+long_y=long_y[,list(id,class,time,value)]
+long_y=long_y[order(id,time)]
+head(long_y)
+
+long_z=long_z[,list(id,class,time,value)]
+long_z=long_z[order(id,time)]
+head(long_z)
+
+```
+
+## **Data Visualization**
+
+In order to ease the examination of the 3D plots, acceleration values are turned into velocity and position values by using cumulative summation.
+
+
+```{r , echo=FALSE, warning=FALSE}
+
+##Class 6, id=1
+x1 <- long_x[ which(long_x$id==1), ]
+y1 <- long_y[ which(long_y$id==1), ]
+z1 <- long_z[ which(long_z$id==1), ]
+
+
+x1 <- x1[,speed:=0]
+x1 <- x1[,x_position:=0]
+
+y1 <- y1[,speed:=0]
+y1 <- y1[,y_position:=0]
+
+z1 <- z1[,speed:=0]
+z1 <- z1[,z_position:=0]
+
+
+for(i in 2:315){
+  
+  x1$speed[1]=0
+  x1$x_position[1]=0
+  x1$speed[i] <- x1$value[i-1] + x1$speed[i-1]
+  x1$x_position[i]<- x1$value[i-1]/2 + x1$speed[i-1]+ x1$x_position[i-1]
+  
+  y1$speed[1]=0
+  y1$y_position[1]=0
+  y1$speed[i] <- y1$value[i-1] + y1$speed[i-1]
+  y1$y_position[i]<- y1$value[i-1]/2 + y1$speed[i-1]+ y1$y_position[i-1]
+  
+  z1$speed[1]=0
+  z1$z_position[1]=0
+  z1$speed[i] <- z1$value[i-1] + z1$speed[i-1]
+  z1$z_position[i]<- z1$value[i-1]/2 + z1$speed[i-1]+ z1$z_position[i-1]
+}
+
+# Class 5, id =2
+x2 <- long_x[ which(long_x$id==2), ]
+y2 <- long_y[ which(long_y$id==2), ]
+z2 <- long_z[ which(long_z$id==2), ]
+
+
+
+x2 <- x2[,speed:=0]
+x2 <- x2[,x_position:=0]
+
+y2 <- y2[,speed:=0]
+y2 <- y2[,y_position:=0]
+
+z2 <- z2[,speed:=0]
+z2 <- z2[,z_position:=0]
+
+
+for(i in 2:315){
+  
+  x2$speed[1]=0
+  x2$x_position[1]=0
+  x2$speed[i] <- x2$value[i-1] + x2$speed[i-1]
+  x2$x_position[i]<- x2$value[i-1]/2 + x2$speed[i-1]+ x2$x_position[i-1]
+  
+  y2$speed[1]=0
+  y2$y_position[1]=0
+  y2$speed[i] <- y2$value[i-1] + y2$speed[i-1]
+  y2$y_position[i]<- y2$value[i-1]/2 + y2$speed[i-1]+ y2$y_position[i-1]
+  
+  z2$speed[1]=0
+  z2$z_position[1]=0
+  z2$speed[i] <- z2$value[i-1] + z2$speed[i-1]
+  z2$z_position[i]<- z2$value[i-1]/2 + z2$speed[i-1]+ z2$z_position[i-1]
+}
+
+# Class 3, id=4
+
+x4 <- long_x[ which(long_x$id==4), ]
+y4 <- long_y[ which(long_y$id==4), ]
+z4 <- long_z[ which(long_z$id==4), ]
+
+
+
+x4 <- x4[,speed:=0]
+x4 <- x4[,x_position:=0]
+
+y4 <- y4[,speed:=0]
+y4 <- y4[,y_position:=0]
+
+z4 <- z4[,speed:=0]
+z4 <- z4[,z_position:=0]
+
+
+for(i in 2:315){
+  
+  x4$speed[1]=0
+  x4$x_position[1]=0
+  x4$speed[i] <- x4$value[i-1] + x4$speed[i-1]
+  x4$x_position[i]<- x4$value[i-1]/2 + x4$speed[i-1]+ x4$x_position[i-1]
+  
+  y4$speed[1]=0
+  y4$y_position[1]=0
+  y4$speed[i] <- y4$value[i-1] + y4$speed[i-1]
+  y4$y_position[i]<- y4$value[i-1]/2 + y4$speed[i-1]+ y4$y_position[i-1]
+  
+  z4$speed[1]=0
+  z4$z_position[1]=0
+  z4$speed[i] <- z4$value[i-1] + z4$speed[i-1]
+  z4$z_position[i]<- z4$value[i-1]/2 + z4$speed[i-1]+ z4$z_position[i-1]
+}
+
+
+#Class 4, id=5
+
+x5 <- long_x[ which(long_x$id==5), ]
+y5 <- long_y[ which(long_y$id==5), ]
+z5 <- long_z[ which(long_z$id==5), ]
+
+
+
+x5 <- x5[,speed:=0]
+x5 <- x5[,x_position:=0]
+
+y5 <- y5[,speed:=0]
+y5 <- y5[,y_position:=0]
+
+z5 <- z5[,speed:=0]
+z5 <- z5[,z_position:=0]
+
+
+for(i in 2:315){
+  
+  x5$speed[1]=0
+  x5$x_position[1]=0
+  x5$speed[i] <- x5$value[i-1] + x5$speed[i-1]
+  x5$x_position[i]<- x5$value[i-1]/2 + x5$speed[i-1]+ x5$x_position[i-1]
+  
+  y5$speed[1]=0
+  y5$y_position[1]=0
+  y5$speed[i] <- y5$value[i-1] + y5$speed[i-1]
+  y5$y_position[i]<- y5$value[i-1]/2 + y5$speed[i-1]+ y5$y_position[i-1]
+  
+  z5$speed[1]=0
+  z5$z_position[1]=0
+  z5$speed[i] <- z5$value[i-1] + z5$speed[i-1]
+  z5$z_position[i]<- z5$value[i-1]/2 + z5$speed[i-1]+ z5$z_position[i-1]
+}
+
+
+#class 8, id=6
+
+x6 <- long_x[ which(long_x$id==6), ]
+y6 <- long_y[ which(long_y$id==6), ]
+z6 <- long_z[ which(long_z$id==6), ]
+
+
+
+x6 <- x6[,speed:=0]
+x6 <- x6[,x_position:=0]
+
+y6 <- y6[,speed:=0]
+y6 <- y6[,y_position:=0]
+
+z6 <- z6[,speed:=0]
+z6 <- z6[,z_position:=0]
+
+
+for(i in 2:315){
+  
+  x6$speed[1]=0
+  x6$x_position[1]=0
+  x6$speed[i] <- x6$value[i-1] + x6$speed[i-1]
+  x6$x_position[i]<- x6$value[i-1]/2 + x6$speed[i-1]+ x6$x_position[i-1]
+  
+  y6$speed[1]=0
+  y6$y_position[1]=0
+  y6$speed[i] <- y6$value[i-1] + y6$speed[i-1]
+  y6$y_position[i]<- y6$value[i-1]/2 + y6$speed[i-1]+ y6$y_position[i-1]
+  
+  z6$speed[1]=0
+  z6$z_position[1]=0
+  z6$speed[i] <- z6$value[i-1] + z6$speed[i-1]
+  z6$z_position[i]<- z6$value[i-1]/2 + z6$speed[i-1]+ z6$z_position[i-1]
+}
+
+# class 7, id =7
+
+x7 <- long_x[ which(long_x$id==7), ]
+y7 <- long_y[ which(long_y$id==7), ]
+z7 <- long_z[ which(long_z$id==7), ]
+
+
+
+x7 <- x7[,speed:=0]
+x7 <- x7[,x_position:=0]
+
+y7 <- y7[,speed:=0]
+y7 <- y7[,y_position:=0]
+
+z7 <- z7[,speed:=0]
+z7 <- z7[,z_position:=0]
+
+
+for(i in 2:315){
+  
+  x7$speed[1]=0
+  x7$x_position[1]=0
+  x7$speed[i] <- x7$value[i-1] + x7$speed[i-1]
+  x7$x_position[i]<- x7$value[i-1]/2 + x7$speed[i-1]+ x7$x_position[i-1]
+  
+  y7$speed[1]=0
+  y7$y_position[1]=0
+  y7$speed[i] <- y7$value[i-1] + y7$speed[i-1]
+  y7$y_position[i]<- y7$value[i-1]/2 + y7$speed[i-1]+ y7$y_position[i-1]
+  
+  z7$speed[1]=0
+  z7$z_position[1]=0
+  z7$speed[i] <- z7$value[i-1] + z7$speed[i-1]
+  z7$z_position[i]<- z7$value[i-1]/2 + z7$speed[i-1]+ z7$z_position[i-1]
+}
+
+# class 1, id=11
+
+x11 <- long_x[ which(long_x$id==11), ]
+y11 <- long_y[ which(long_y$id==11), ]
+z11 <- long_z[ which(long_z$id==11), ]
+
+
+x11 <- x11[,speed:=0]
+x11 <- x11[,x_position:=0]
+
+y11 <- y11[,speed:=0]
+y11 <- y11[,y_position:=0]
+
+z11 <- z11[,speed:=0]
+z11 <- z11[,z_position:=0]
+
+
+for(i in 2:315){
+  
+  x11$speed[1]=0
+  x11$x_position[1]=0
+  x11$speed[i] <- x11$value[i-1] + x11$speed[i-1]
+  x11$x_position[i]<- x11$value[i-1]/2 + x11$speed[i-1]+ x11$x_position[i-1]
+  
+  y11$speed[1]=0
+  y11$y_position[1]=0
+  y11$speed[i] <- y11$value[i-1] + y11$speed[i-1]
+  y11$y_position[i]<- y11$value[i-1]/2 + y11$speed[i-1]+ y11$y_position[i-1]
+  
+  z11$speed[1]=0
+  z11$z_position[1]=0
+  z11$speed[i] <- z11$value[i-1] + z11$speed[i-1]
+  z11$z_position[i]<- z11$value[i-1]/2 + z11$speed[i-1]+ z11$z_position[i-1]
+}
+
+# class 2 id=15
+
+x15 <- long_x[ which(long_x$id==15), ]
+y15 <- long_y[ which(long_y$id==15), ]
+z15 <- long_z[ which(long_z$id==15), ]
+
+
+x15 <- x15[,speed:=0]
+x15 <- x15[,x_position:=0]
+
+y15 <- y15[,speed:=0]
+y15 <- y15[,y_position:=0]
+
+z15 <- z15[,speed:=0]
+z15 <- z15[,z_position:=0]
+
+
+for(i in 2:315){
+  
+  x15$speed[1]=0
+  x15$x_position[1]=0
+  x15$speed[i] <- x15$value[i-1] + x15$speed[i-1]
+  x15$x_position[i]<- x15$value[i-1]/2 + x15$speed[i-1]+ x15$x_position[i-1]
+  
+  y15$speed[1]=0
+  y15$y_position[1]=0
+  y15$speed[i] <- y15$value[i-1] + y15$speed[i-1]
+  y15$y_position[i]<- y15$value[i-1]/2 + y15$speed[i-1]+ y15$y_position[i-1]
+  
+  z15$speed[1]=0
+  z15$z_position[1]=0
+  z15$speed[i] <- z15$value[i-1] + z15$speed[i-1]
+  z15$z_position[i]<- z15$value[i-1]/2 + z15$speed[i-1]+ z15$z_position[i-1]
+}
+
+
+#Plotting
+par(mfrow=c(1,2))
+g1 <-scatter3D(x11$x_position, y11$y_position, z11$z_position, phi = 0, type = "l",  bty = "g", ticktype = "detailed",lwd = 4, main="Class 1 Position Plot"
+)
+g2 <-scatter3D(x15$x_position, y15$y_position, z15$z_position, phi = 0, type = "l",  bty = "g", ticktype = "detailed",lwd = 4, main="Class 2 Position Plot"
+)
+par(mfrow=c(1,2))
+g3 <-scatter3D(x4$x_position, y4$y_position, z4$z_position, phi = 0, type = "l",  bty = "g", ticktype = "detailed",lwd = 4, main="Class 3 Position Plot"
+)
+g4 <-scatter3D(x5$x_position, y5$y_position, z5$z_position, phi = 0, type = "l",  bty = "g", ticktype = "detailed",lwd = 4, main="class 4 Position Plot"
+)
+par(mfrow=c(1,2))
+g5 <-scatter3D(x2$x_position, y2$y_position, z2$z_position, phi = 0, type = "l",  bty = "g", ticktype = "detailed",lwd = 4, main="Class 5 Position Plot"
+)
+g6 <-scatter3D(x1$x_position, y1$y_position, z1$z_position, phi = 0, type = "l",  bty = "g", ticktype = "detailed",lwd = 4, main="Class 6 Position Plot"
+)
+par(mfrow=c(1,2))
+g7 <-scatter3D(x7$x_position, y7$y_position, z7$z_position, phi = 0, type = "l",  bty = "g", ticktype = "detailed",lwd = 4, main="Class 7 Position Plot"
+)
+g8 <-scatter3D(x6$x_position, y6$y_position, z6$z_position, phi = 0, type = "l",  bty = "g", ticktype = "detailed",lwd = 4, main="Class 8 Position Plot"
+)
+```
+
+
+In order to show the similarity of the time series in same the class, some acceleration plots are given below:
+*Legends are removed due to huge number of time series.
+
+
+```{r ,  warning=FALSE, fig1, fig.height = 4, fig.width = 6}
+## VISUALIZATION
+
+
+class1_x <- long_x[which(long_x$class==1),]
+class1_y <- long_y[which(long_y$class==1),]
+class1_z <- long_z[which(long_z$class==1),]
+
+class3_x <- long_x[which(long_x$class==3),]
+class3_y <- long_y[which(long_y$class==3),]
+class3_z <- long_z[which(long_z$class==3),]
+
+class4_x <- long_x[which(long_x$class==4),]
+class4_y <- long_y[which(long_y$class==4),]
+class4_z <- long_z[which(long_z$class==4),]
+
+
+ggplot(class1_x, aes(time,value)) + geom_line(aes(color=as.character(id))) +ggtitle("class 1 x-axis")+ theme(legend.position = "None")
+ggplot(class3_x, aes(time,value)) + geom_line(aes(color=as.character(id))) +ggtitle("class 3 x-axis")+ theme(legend.position = "None")
+ggplot(class4_x, aes(time,value)) + geom_line(aes(color=as.character(id))) +ggtitle("class 4 x-axis")+ theme(legend.position = "None")
+
+
+```
+
+## **Time Series Representation**
+
+In order to represent multivariate time series, the ways of reducing dimension from 3D to 2D are searched. One of the possible ways is calculating the length of a vector by using x-y-z coordinates. However, by doing this transformation, we are losing the direction of a vector which is an important factor for the recognition of a gesture. There are classes of gestures that are the same in terms of the shape but the direction. Some plots are drawn in order to visualize the loss of the difference between classes. Again, legends are removed.
+
+
+```{r , echo=FALSE, warning=FALSE, fig2, fig.height = 3, fig.width = 5}
+norm_data <- data.table(long_x, long_y$value, long_z$value, leng= sqrt(long_x$value^2 + long_y$value^2 + long_z$value^2 ))
+
+ggplot(norm_data[which(norm_data$class==3)], aes(time,leng)) + geom_line(aes(color=as.character(id))) +ggtitle("class 3 norm") + theme(legend.position = "None")
+ggplot(norm_data[which(norm_data$class==4)], aes(time,leng)) + geom_line(aes(color=as.character(id))) +ggtitle("class 4 norm") + theme(legend.position = "None")
+ggplot(norm_data[which(norm_data$class==1)], aes(time,leng)) + geom_line(aes(color=as.character(id))) +ggtitle("class 1 norm") + theme(legend.position = "None")
+
+
+```
+
+As seen above, representing time series according to length information is not useful.
+
+For simplicity, an instance from a class (in this case from class 1 ) is chosen to construct a representation model. The same instance is used to compare different representation models according to SSE (sum of squared errors). Each axis data of this class is analyzed separately.
+
+### **Piecewise Aggregate Approximation (PAA)**
+
+For PAA different segment lengths are tried. there are 315 entries in time series of each axis. Interval length of 5, 10 and 15 is tried. Time series are not that noisy, there doesn't seem to be much loss for length = 15. So, length is chosen as 15. (Equal lengths for each axis)
+
+```{r ,  warning=FALSE}
+
+segment_length1=15
+
+x11_ts=long_x[id==11]$value
+paa_rep_x11=repr_paa(x11_ts, segment_length1, meanC)
+
+#class 1 y axis
+y11_ts=long_y[id==11]$value
+paa_rep_y11=repr_paa(y11_ts, segment_length1, meanC)
+
+#class 1 z axis
+z11_ts=long_z[id==11]$value
+paa_rep_z11=repr_paa(z11_ts, segment_length1, meanC)
+
+par(mfrow=c(1,2))
+plot(paa_rep_x11,type='l', main=("PAA X Time Series"))
+plot(x11_ts, type='l', main=("Original X Time Series"))
+par(mfrow=c(1,2))
+plot(paa_rep_y11,type='l',main=("PAA Y Time Series"))
+plot(y11_ts, type='l',main=("Original X Time Series"))
+par(mfrow=c(1,2))
+plot(paa_rep_z11,type='l',main=("PAA X Time Series"))
+plot(z11_ts, type='l',main=("Original X Time Series"))
+
+
+```
+
+
+Means of each segment for each axis(x-y-z) are shown below, respectively:
+
+
+```{r , echo=FALSE, warning=FALSE}
+
+paa_rep_x11
+paa_rep_y11
+paa_rep_z11
+```
+
+
+### **Symbolic Aggregate Approximation (SAX)**
+
+Sax segment length is chosen as 4 and 5 symbols (letters) are used. Symbols for first 6 intervals are shown belov, respectively:
+
+
+```{r , echo=FALSE, warning=FALSE}
+##Segmentation SAX
+
+sax_segment_length1=4
+sax_alphabet_size1=5
+sax_rep_x11=repr_sax(x11_ts, q = sax_segment_length1, a = sax_alphabet_size1)
+head(sax_rep_x11)
+
+dummy_time_x11=c(1:(length(sax_rep_x11)-1))*sax_segment_length1
+dummy_time_x11=c(dummy_time_x11,length(x11_ts))  
+dt_sax_x11=data.table(time=dummy_time_x11,sax_rep_char_x11=sax_rep_x11)
+
+
+#sax y
+
+sax_rep_y11=repr_sax(y11_ts, q = sax_segment_length1, a = sax_alphabet_size1)
+head(sax_rep_y11)
+
+dummy_time_y11=c(1:(length(sax_rep_y11)-1))*sax_segment_length1
+dummy_time_y11=c(dummy_time_x11,length(y11_ts))  
+dt_sax_y11=data.table(time=dummy_time_y11,sax_rep_char_y11=sax_rep_y11)
+
+
+#sax z
+
+
+sax_rep_z11=repr_sax(z11_ts, q = sax_segment_length1, a = sax_alphabet_size1)
+head(sax_rep_z11)
+
+dummy_time_z11=c(1:(length(sax_rep_z11)-1))*sax_segment_length1
+dummy_time_z11=c(dummy_time_z11,length(z11_ts))  
+dt_sax_z11=data.table(time=dummy_time_z11,sax_rep_char_z11=sax_rep_z11)
+
+
+```
+
+
+
+
+```{r , echo=FALSE, warning=FALSE}
+
+# table for x-axis class 1
+class1_x_plot=long_x[id==11]
+
+dummy_time_x11=c(1:(length(paa_rep_x11)-1))*segment_length1
+dummy_time_x11=c(dummy_time_x11,nrow(class1_x_plot))   
+
+#mean values for intervals
+dt_paa_x11=data.table(time=dummy_time_x11,paa_rep_x11=paa_rep_x11)
+
+# table for y-axis class 1
+class1_y_plot=long_y[id==11]
+
+dummy_time_y11=c(1:(length(paa_rep_y11)-1))*segment_length1
+dummy_time_y11=c(dummy_time_y11,nrow(class1_y_plot))   
+
+#means
+dt_paa_y11=data.table(time=dummy_time_y11,paa_rep_y11=paa_rep_y11)
+
+
+# table for z-axis class 1
+class1_z_plot=long_z[id==11]
+
+dummy_time_z11=c(1:(length(paa_rep_z11)-1))*segment_length1
+dummy_time_z11=c(dummy_time_z11,nrow(class1_z_plot))   
+
+dt_paa_z11=data.table(time=dummy_time_z11,paa_rep_z11=paa_rep_z11)
+
+
+
+```
+
+
+### **Comparison of the Representation Methods**
+
+Tables for each axis and, corresponding PAA mean, SAX mean values etc. are below:
+
+```{r , echo=FALSE, warning=FALSE}
+
+#fiiling na values
+#x
+
+class1_x_plot=merge(class1_x_plot,dt_paa_x11,by='time',all.x=T)
+
+class1_x_plot[,paa_rep_x11:=nafill(paa_rep_x11,'nocb')] 
+class1_x_plot=merge(class1_x_plot,dt_sax_x11,by='time',all.x=T)
+
+class1_x_plot[,sax_rep_char_num_x11:=nafill(as.numeric(as.factor(sax_rep_char_x11)),'nocb')] # from data.table  
+class1_x_plot[,sax_rep_x11:=mean(value),by=list(sax_rep_char_num_x11)]
+
+class1_x_plot
+#y
+
+class1_y_plot=merge(class1_y_plot,dt_paa_y11,by='time',all.x=T)
+
+class1_y_plot[,paa_rep_y11:=nafill(paa_rep_y11,'nocb')] # from data.table
+class1_y_plot=merge(class1_y_plot,dt_sax_y11,by='time',all.x=T)
+
+class1_y_plot[,sax_rep_char_num_y11:=nafill(as.numeric(as.factor(sax_rep_char_y11)),'nocb')] # from data.table  
+class1_y_plot[,sax_rep_y11:=mean(value),by=list(sax_rep_char_num_y11)]
+
+class1_y_plot
+
+#z
+class1_z_plot=merge(class1_z_plot,dt_paa_z11,by='time',all.x=T)
+
+class1_z_plot[,paa_rep_z11:=nafill(paa_rep_z11,'nocb')] # from data.table
+class1_z_plot=merge(class1_z_plot,dt_sax_z11,by='time',all.x=T)
+
+
+class1_z_plot[,sax_rep_char_num_z11:=nafill(as.numeric(as.factor(sax_rep_char_z11)),'nocb')] # from data.table  
+class1_z_plot[,sax_rep_z11:=mean(value),by=list(sax_rep_char_num_z11)]
+
+class1_z_plot
+
+
+```
+
+Original time series and representation plots:
+
+
+```{r ,  warning=FALSE}
+#Plotting
+
+
+class1_x_plot=melt(class1_x_plot,id.vars='time',
+               measure.vars=c('value','paa_rep_x11','sax_rep_x11'))
+ggplot(class1_x_plot,aes(x=time,y=value,color=variable),lwd=4)+
+  geom_line() +ggtitle("Class 1 X- axis")
+
+class1_y_plot=melt(class1_y_plot,id.vars='time',
+                   measure.vars=c('value','paa_rep_y11','sax_rep_y11'))
+ggplot(class1_y_plot,aes(x=time,y=value,color=variable),lwd=4)+
+  geom_line()+ggtitle("Class 1 Y- axis")
+
+class1_z_plot=melt(class1_z_plot,id.vars='time',
+                   measure.vars=c('value','paa_rep_z11','sax_rep_z11'))
+ggplot(class1_z_plot,aes(x=time,y=value,color=variable),lwd=4)+
+  geom_line()+ggtitle("Class 1 Z- axis")
+
+```
+
+Tables for observations, actual values and errors (SSE):
+
+
+```{r , warning=FALSE}
+class1_x_plot=merge(class1_x_plot,long_x[id==11,list(time,obs=value)],by='time')
+
+class1_x_plot[,list(sse=sum((value-obs)^2)),list(variable)]
+
+class1_y_plot=merge(class1_y_plot,long_y[id==11,list(time,obs=value)],by='time')
+
+class1_y_plot[,list(sse=sum((value-obs)^2)),list(variable)]
+
+class1_z_plot=merge(class1_z_plot,long_z[id==11,list(time,obs=value)],by='time')
+
+class1_z_plot[,list(sse=sum((value-obs)^2)),list(variable)]
+
+
+```
+
+As expected SAX method has higher SSE value compared to PAA. However, while PAA method calculates 21 means, SaX method only calculates 5 means corresponding to each symbol. Errors are not that different in these two models. So, choosing SAX method as a representation model can be more beneficial.
+
+

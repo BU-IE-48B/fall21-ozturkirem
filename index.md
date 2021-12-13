@@ -8,3 +8,8 @@ There will be several homework assignments done for this course.
 ### HW 1
 [Here](files/Ie48b-hw1.html) is HW1 html file.
 [Code](files/Ie48b-hw1.Rmd)
+
+
+### HW 1
+[Here](files/Ie48b-hw3.html) is HW1 html file.
+[Code](files/Ie48b-hw3.Rmd)

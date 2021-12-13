@@ -1,0 +1,606 @@
+---
+title: "IE48B-hw3"
+author: "Irem Ozturk"
+date: "12 12 2021"
+output: html_document
+---
+
+
+## Introduction
+
+For this homework, datasets "ECG200","CBF","Ham","Plane" and "Trace have been selected from www.timeseriesclassification.com. Aim is to find the best parameter combination in terms of the accuracy rate using different approaches. 
+
+
+```{r ,warning=FALSE}
+
+library(data.table)
+library(ggplot2)
+library(repr)
+library(rpart)
+library(rattle)
+library(TSrepr)
+library(zoo)
+library(TSdist)
+library(dtw)
+setwd("c:/Users/oztur/Downloads")
+current_folder=getwd()
+datasets=c('ECG200','CBF','Ham','Plane','Trace')
+
+
+```
+
+```{r,warning=FALSE}
+
+traindata <- list()
+
+trainclass <- list()
+
+for(i in 1:5){
+  dataset = datasets[i]
+  main_path=sprintf('%s/ClassificationData/%s/%s',current_folder,dataset,dataset)
+  
+  dist_path=sprintf('%s/ClassificationData/%s/distances/%s',current_folder,dataset,dataset)
+  
+  train_data_path=sprintf('%s_TRAIN.txt',main_path)
+  traindata[[i]]=(fread(train_data_path))
+  
+  #first column is the class variable
+  trainclass[[i]]=t(traindata[[i]][,1]) # takes -1 and 1
+
+  #drop first column
+  traindata[[i]]=traindata[[i]][,2:ncol(traindata[[i]])]
+  
+}
+
+```
+
+
+
+## Representations
+
+To represent the time series Piecewise Aggregate Approximation and SAX representation have been used with parameters paa_segment_length=5, sax_segment_length=4 and the alphebet_size=5.
+Plots of the selected time series and its representation can be seen below:
+
+
+```{r,warning=FALSE}
+
+traindata_rep <- list()
+
+trainclass_rep <- list()
+longtrain_rep <- list()
+
+for(i in 1:5){
+  dataset = datasets[i]
+  main_path=sprintf('%s/ClassificationData/%s/%s',current_folder,dataset,dataset)
+  
+  dist_path=sprintf('%s/ClassificationData/%s/distances/%s',current_folder,dataset,dataset)
+  
+  train_data_path=sprintf('%s_TRAIN.txt',main_path)
+  traindata_rep[[i]]=(fread(train_data_path))
+  
+  #first column is the class variable
+  trainclass_rep[[i]]=t(traindata[[i]][,1]) # takes -1 and 1
+
+setnames(traindata_rep[[i]],'V1','class')
+traindata_rep[[i]]=traindata_rep[[i]][order(class)]
+traindata_rep[[i]][,class:=as.character(class)]
+traindata_rep[[i]][,id:=1:.N]
+
+longtrain_rep[[i]]=melt(traindata_rep[[i]],id.vars=c('id','class'))
+
+longtrain_rep[[i]][,time:=as.numeric(gsub("\\D", "", variable))-1]
+
+longtrain_rep[[i]]=longtrain_rep[[i]][,list(id,class,time,value)]
+longtrain_rep[[i]]=longtrain_rep[[i]][order(id,time)]
+
+
+}
+
+## Piecewise Aggregate Approximation and SAX representation
+paarep <- list()
+saxrep <- list()
+datats_rep <- list()
+
+paarep[[1]] <- list()
+paarep[[2]] <- list()
+paarep[[3]] <- list()
+paarep[[4]] <- list()
+paarep[[5]] <- list()
+
+saxrep[[1]] <- list()
+saxrep[[2]] <- list()
+saxrep[[3]] <- list()
+saxrep[[4]] <- list()
+saxrep[[5]] <- list()
+
+datats_rep[[1]] <- list()
+datats_rep[[2]] <- list()
+datats_rep[[3]] <- list()
+datats_rep[[4]] <- list()
+datats_rep[[5]] <- list()
+temp <- c()
+for(i in 1:5){
+    for(selected_series in 1:nrow(traindata[[i]])){
+     segment_length=5
+      
+     temp =longtrain_rep[[i]][longtrain_rep[[i]]$id==selected_series]$value
+     datats_rep[[i]][[selected_series]] <- temp
+      paarep[[i]][[selected_series]]=repr_paa(datats_rep[[i]][[selected_series]], segment_length, meanC)
+      
+      sax_segment_length=4
+      sax_alphabet_size=5
+      saxrep[[i]][[selected_series]]=repr_sax(datats_rep[[i]][[selected_series]], q = sax_segment_length, a = sax_alphabet_size)
+
+    }
+}
+
+
+plot(datats_rep[[1]][[1]], type="l")
+plot(paarep[[1]][[1]], type="l")
+
+
+
+
+```
+
+
+## Distance Measures
+
+To calculate the distances 4 different distance measures have been used with different parameters. List of them:
+Eucladian distance,
+Dynamic Time Warping (no_window, window_size=(10,20), window_type=sakoechiba)
+LCSS(epsilon=(1, 0.5))
+ERP(epsilon=(1, 0.5))
+In total, there are 8 different settings.
+
+Due to the long run times of the calculations of the distance measures, distance matrices are stored in .csv files.
+
+```{r eval=FALSE, include=FALSE}
+
+for(dataset in datasets){
+  
+  main_path=sprintf('%s/ClassificationData/%s/%s',current_folder,dataset,dataset)
+  
+  dist_path=sprintf('%s/ClassificationData/%s/distances/%s',current_folder,dataset,dataset)
+  
+  train_data_path=sprintf('%s_TRAIN.txt',main_path)
+  traindata=as.matrix(fread(train_data_path))
+  
+  test_data_path=sprintf('%s_TEST.txt',main_path)
+  testdata=as.matrix(fread(test_data_path))
+  
+  #first column is the class variable
+  trainclass=traindata[,1] # takes -1 and 1
+  testclass=testdata[,1] # takes -1 and 1
+  
+  #drop first column
+  traindata=traindata[,2:ncol(traindata)]
+  testdata=testdata[,2:ncol(testdata)]
+  
+  ## Alternative strategies (for k=1,3,5)
+  # knn k=1 Euclidean distance
+  # knn k=1 DTW distance + no window
+  # knn k=1 DTW distance + window.type='sakoechiba' + window.size=10
+  # knn k=1 DTW distance + window.type='sakoechiba' + window.size=20
+  # knn k=1 LCSS + epsilon=0.05 + no window
+  # knn k=1 LCSS + epsilon=0.1 + no window
+  # knn k=1 ERP + gap penalty=1 + no window
+  # knn k=1 ERP + gap penalty=0.5 + no window
+  
+  # calculate distances and store them to save time
+  large_number=10000
+  dist_euc=as.matrix(dist(traindata))
+  diag(dist_euc)=large_number
+  fwrite(dist_euc,sprintf('%s_euc_raw_dist.csv',dist_path),col.names=F)
+  
+  dist_dtw=as.matrix(dtwDist(traindata))
+  diag(dist_dtw)=large_number
+  fwrite(dist_dtw,sprintf('%s_dtw_raw_dist.csv',dist_path),col.names=F)
+  
+  dist_dtw=as.matrix(dtwDist(traindata,window.type='sakoechiba',window.size=10))
+  diag(dist_dtw)=large_number
+  fwrite(dist_dtw,sprintf('%s_dtw_raw_dist_sakoe_10.csv',dist_path),col.names=F)
+  
+  dist_dtw=as.matrix(dtwDist(traindata,window.type='sakoechiba',window.size=20))
+  diag(dist_dtw)=large_number
+  fwrite(dist_dtw,sprintf('%s_dtw_raw_dist_sakoe_20.csv',dist_path),col.names=F)   
+  
+  # computation of LCSS is from TSdist package
+  dist_lcss=TSDatabaseDistances(traindata,distance='lcss',epsilon=0.05)
+  dist_lcss=as.matrix(dist_lcss)
+  diag(dist_lcss)=large_number
+  fwrite(dist_lcss,sprintf('%s_lcss_raw_epsilon_005.csv',dist_path),col.names=F)  
+  
+  dist_lcss=TSDatabaseDistances(traindata,distance='lcss',epsilon=0.1)
+  dist_lcss=as.matrix(dist_lcss)
+  diag(dist_lcss)=large_number
+  fwrite(dist_lcss,sprintf('%s_lcss_raw_epsilon_01.csv',dist_path),col.names=F) 
+  
+  # computation of ERP is from TSdist package
+  dist_erp=TSDatabaseDistances(traindata,distance='erp',g=0.5)
+  dist_erp=as.matrix(dist_erp)
+  diag(dist_erp)=large_number
+  fwrite(dist_erp,sprintf('%s_erp_raw_gap_005.csv',dist_path),col.names=F)  
+  
+  dist_erp=TSDatabaseDistances(traindata,distance='erp',g=1)
+  dist_erp=as.matrix(dist_erp)
+  diag(dist_erp)=large_number
+  fwrite(dist_erp,sprintf('%s_erp_raw_gap_1.csv',dist_path),col.names=F) 
+} 
+  
+```
+ The only parameter of Nearest Neighbor, namely k is set to 1,3 or 5 throughout the process.
+ In order to evaluate the combinations cross validation with 5 repeats and 10 folds has been used.
+
+
+
+
+```{r,warning=FALSE}
+
+nn_classify_cv=function(dist_matrix,train_class,test_indices,k=1){
+    
+    test_distances_to_train=dist_matrix[test_indices,]
+    test_distances_to_train=test_distances_to_train[,-test_indices]
+    train_class=train_class[-test_indices]
+    #print(str(test_distances_to_train))
+    ordered_indices=apply(test_distances_to_train,1,order)
+    if(k==1){
+        nearest_class=as.numeric(train_class[as.numeric(ordered_indices[1,])])
+        nearest_class=data.table(id=test_indices,nearest_class)
+    } else {
+     
+        nearest_class=apply(ordered_indices[1:k,],2,function(x) {train_class[x]})
+        nearest_class=data.table(id=test_indices,t(nearest_class))
+    }
+    
+    long_nn_class=melt(nearest_class,'id')
+
+    class_counts=long_nn_class[,.N,list(id,value)]
+    class_counts[,predicted_prob:=N/k]
+    wide_class_prob_predictions=dcast(class_counts,id~value,value.var='predicted_prob')
+    wide_class_prob_predictions[is.na(wide_class_prob_predictions)]=0
+    class_predictions=class_counts[,list(predicted=value[which.max(N)]),by=list(id)]
+    
+    
+    return(list(prediction=class_predictions,prob_estimates=wide_class_prob_predictions))
+    
+}
+
+
+```
+
+
+```{r,warning=FALSE}
+library(TunePareto)
+
+set.seed(13429)
+nof_rep=5
+n_fold=10
+
+cv_indices_ecg <- list()
+cv_indices_cbf <- list()
+cv_indices_ham <- list()
+cv_indices_plane <- list()
+cv_indices_trace <- list()
+
+cv_indices_ecg=generateCVRuns(as.vector(trainclass[[1]]), ntimes =nof_rep, nfold = n_fold, 
+                         leaveOneOut = FALSE, stratified = TRUE)
+  
+cv_indices_cbf=generateCVRuns(as.vector(trainclass[[2]]), ntimes =nof_rep, nfold = n_fold, 
+                         leaveOneOut = FALSE, stratified = TRUE)
+  
+cv_indices_ham=generateCVRuns(as.vector(trainclass[[3]]), ntimes =nof_rep, nfold = n_fold, 
+                         leaveOneOut = FALSE, stratified = TRUE)
+  
+  
+cv_indices_plane=generateCVRuns(as.vector(trainclass[[4]]), ntimes =nof_rep, nfold = n_fold, 
+                         leaveOneOut = FALSE, stratified = TRUE)
+  
+  
+cv_indices_trace=generateCVRuns(as.vector(trainclass[[5]]), ntimes =nof_rep, nfold = n_fold, 
+                         leaveOneOut = FALSE, stratified = TRUE)
+  
+
+
+```
+
+
+```{r,warning=FALSE}
+dataset='ECG200'
+dist_folder=sprintf('%s/ClassificationData/%s/distances/',current_folder,dataset)
+
+dist_files_ecg=as.vector((list.files(dist_folder, full.names=T)))
+
+dataset='CBF'
+dist_folder=sprintf('%s/ClassificationData/%s/distances/',current_folder,dataset)
+
+dist_files_cbf=as.vector((list.files(dist_folder, full.names=T)))
+
+dataset='Ham'
+dist_folder=sprintf('%s/ClassificationData/%s/distances/',current_folder,dataset)
+
+dist_files_ham=as.vector((list.files(dist_folder, full.names=T)))
+
+dataset='Plane'
+dist_folder=sprintf('%s/ClassificationData/%s/distances/',current_folder,dataset)
+
+dist_files_plane=as.vector((list.files(dist_folder, full.names=T)))
+
+dataset='Trace'
+dist_folder=sprintf('%s/ClassificationData/%s/distances/',current_folder,dataset)
+
+dist_files_trace=as.vector((list.files(dist_folder, full.names=T)))
+
+
+```
+
+## ECG200
+Overall results for ECG200 data can be seen in table below:
+
+```{r}
+k_levels=c(1,3,5) ##nnk values
+
+dataset='ECG200'
+
+approach_file_ecg <- c("ECG200_dtw_raw_dist",         
+                        "ECG200_dtw_raw_dist_sakoe_10",
+                        "ECG200_dtw_raw_dist_sakoe_20",
+                        "ECG200_erp_raw_gap_005",     
+                        "ECG200_erp_raw_gap_1",       
+                        "ECG200_euc_raw_dist",         
+                        "ECG200_lcss_raw_epsilon_005",
+                        "ECG200_lcss_raw_epsilon_01")
+
+
+#approach_file_ecg=dist_files_ecg
+result_ecg=vector('list',length(dist_files_ecg)*nof_rep*n_fold*length(k_levels))
+iter=1
+
+ 
+   for(m in 1:length(dist_files_ecg)) {
+     dist_mat=as.matrix(fread(dist_files_ecg[m],header=FALSE))
+      for(i in 1:nof_rep){
+          this_fold=cv_indices_ecg[[i]]
+          for(j in 1:n_fold){
+              test_indices=this_fold[[j]]
+              for(k in 1:length(k_levels)){
+                 current_k=k_levels[k]
+                  current_fold=nn_classify_cv(dist_mat,as.vector(trainclass[[1]]),test_indices,k=current_k)
+                  accuracy=sum(trainclass[[1]][test_indices]==current_fold$prediction$predicted)/length(test_indices)
+                  tmp_ecg=data.table(approach=approach_file_ecg[m],repid=i,foldid=j,dataset=datasets[1],
+                               k=current_k,acc=accuracy)
+                  result_ecg[[iter]]=tmp_ecg
+                  iter=iter+1
+                
+             }
+            
+         }
+    
+      } 
+   }
+    
+
+overall_results_ecg=rbindlist(result_ecg)
+overall_results_ecg[,list(avg_acc=mean(acc),sdev_acc=sd(acc),result_count=.N),by=list(approach,k)]
+
+```
+
+
+The best combination is Eucledain distance with k=3 in terms of the accuracy mean. In addition the standard deviation of it is relatively small.
+
+## CBF
+
+Overall results for CBF data can be seen in table below:
+
+```{r,warning=FALSE}
+
+
+dataset='CBF'
+
+approach_file_cbf <- c("CBF_dtw_raw_dist",         
+                        "CBF_dtw_raw_dist_sakoe_10",
+                        "CBF_dtw_raw_dist_sakoe_20",
+                        "CBF_erp_raw_gap_005",     
+                        "CBF_erp_raw_gap_1",       
+                        "CBF_euc_raw_dist",         
+                        "CBF_lcss_raw_epsilon_005",
+                        "CBF_lcss_raw_epsilon_01")
+
+result_cbf=vector('list',length(dist_files_cbf)*nof_rep*n_fold*length(k_levels))
+iter=1
+
+ 
+   for(m in 1:length(dist_files_cbf)) {
+     dist_mat=as.matrix(fread(dist_files_cbf[m],header=FALSE))
+      for(i in 1:nof_rep){
+          this_fold=cv_indices_cbf[[i]]
+          for(j in 1:n_fold){
+              test_indices=this_fold[[j]]
+              for(k in 1:length(k_levels)){
+                 current_k=k_levels[k]
+                  current_fold=nn_classify_cv(dist_mat,as.vector(trainclass[[2]]),test_indices,k=current_k)
+                  accuracy=sum(trainclass[[2]][test_indices]==current_fold$prediction$predicted)/length(test_indices)
+                  tmp_cbf=data.table(approach=approach_file_cbf[m],repid=i,foldid=j,dataset=datasets[2],
+                               k=current_k,acc=accuracy)
+                  result_cbf[[iter]]=tmp_cbf
+                  iter=iter+1
+                
+             }
+            
+         }
+    
+      } 
+   }
+    
+
+overall_results_cbf=rbindlist(result_cbf)
+overall_results_cbf[,list(avg_acc=mean(acc),sdev_acc=sd(acc),result_count=.N),by=list(approach,k)]
+
+```
+
+Generally, dynamic time warping works well with this dataset.
+
+## Ham
+
+Overall results for Ham data can be seen in table below:
+
+```{r,warning=FALSE}
+
+dataset='Ham'
+
+approach_file_ham <- c("Ham_dtw_raw_dist",         
+                        "Ham_dtw_raw_dist_sakoe_10",
+                        "Ham_dtw_raw_dist_sakoe_20",
+                        "Ham_erp_raw_gap_005",     
+                        "Ham_erp_raw_gap_1",       
+                        "Ham_euc_raw_dist",         
+                        "Ham_lcss_raw_epsilon_005",
+                        "Ham_lcss_raw_epsilon_01")
+
+
+result_ham=vector('list',length(dist_files_ham)*nof_rep*n_fold*length(k_levels))
+iter=1
+
+ 
+   for(m in 1:length(dist_files_ham)) {
+     dist_mat=as.matrix(fread(dist_files_ham[m],header=FALSE))
+      for(i in 1:nof_rep){
+          this_fold=cv_indices_ham[[i]]
+          for(j in 1:n_fold){
+              test_indices=this_fold[[j]]
+              for(k in 1:length(k_levels)){
+                 current_k=k_levels[k]
+                  current_fold=nn_classify_cv(dist_mat,as.vector(trainclass[[3]]),test_indices,k=current_k)
+                  accuracy=sum(trainclass[[3]][test_indices]==current_fold$prediction$predicted)/length(test_indices)
+                  tmp_ham=data.table(approach=approach_file_ham[m],repid=i,foldid=j,dataset=datasets[3],
+                               k=current_k,acc=accuracy)
+                  result_ham[[iter]]=tmp_ham
+                  iter=iter+1
+                
+             }
+            
+         }
+    
+      } 
+   }
+    
+
+overall_results_ham=rbindlist(result_ham)
+overall_results_ham[,list(avg_acc=mean(acc),sdev_acc=sd(acc),result_count=.N),by=list(approach,k)]
+
+```
+
+
+The best combinations are Eucledain distance with k=1 and DTW with window size=20 k=1 in terms of the accuracy mean. In addition the standard deviation of them are relatively small.
+
+## Plane
+
+Overall results for Plane data can be seen in table below:
+
+```{r,warning=FALSE}
+dataset='Plane'
+
+approach_file_plane <- c("Plane_dtw_raw_dist",         
+                        "Plane_raw_dist_sakoe_10",
+                        "Plane_dtw_raw_dist_sakoe_20",
+                        "Plane_erp_raw_gap_005",     
+                        "Plane_erp_raw_gap_1",       
+                        "Plane_euc_raw_dist",         
+                        "Plane_lcss_raw_epsilon_005",
+                        "Plane_lcss_raw_epsilon_01")
+
+result_plane=vector('list',length(dist_files_plane)*nof_rep*n_fold*length(k_levels))
+iter=1
+
+ 
+   for(m in 1:length(dist_files_plane)) {
+     dist_mat=as.matrix(fread(dist_files_plane[m],header=FALSE))
+      for(i in 1:nof_rep){
+          this_fold=cv_indices_plane[[i]]
+          for(j in 1:n_fold){
+              test_indices=this_fold[[j]]
+              for(k in 1:length(k_levels)){
+                 current_k=k_levels[k]
+                  current_fold=nn_classify_cv(dist_mat,as.vector(trainclass[[4]]),test_indices,k=current_k)
+                  accuracy=sum(trainclass[[4]][test_indices]==current_fold$prediction$predicted)/length(test_indices)
+                  tmp_plane=data.table(approach=approach_file_plane[m],repid=i,foldid=j,dataset=datasets[4],
+                               k=current_k,acc=accuracy)
+                  result_plane[[iter]]=tmp_plane
+                  iter=iter+1
+                
+             }
+            
+         }
+    
+      } 
+   }
+    
+
+overall_results_plane=rbindlist(result_plane)
+overall_results_plane[,list(avg_acc=mean(acc),sdev_acc=sd(acc),result_count=.N),by=list(approach,k)]
+
+```
+
+Dynamic time warping and ERP work well.
+
+## Trace
+
+Overall results for Trace data can be seen in table below:
+
+```{r,warning=FALSE}
+dataset='Trace'
+
+approach_file_trace <- c("Trace_dtw_raw_dist",         
+                        "Trace_raw_dist_sakoe_10",
+                        "Trace_dtw_raw_dist_sakoe_20",
+                        "Trace_erp_raw_gap_005",     
+                        "Trace_erp_raw_gap_1",       
+                        "Trace_euc_raw_dist",         
+                        "Trace_lcss_raw_epsilon_005",
+                        "Trace_lcss_raw_epsilon_01")
+
+result_trace=vector('list',length(dist_files_trace)*nof_rep*n_fold*length(k_levels))
+iter=1
+
+ 
+   for(m in 1:length(dist_files_trace)) {
+     dist_mat=as.matrix(fread(dist_files_trace[m],header=FALSE))
+      for(i in 1:nof_rep){
+          this_fold=cv_indices_trace[[i]]
+          for(j in 1:n_fold){
+              test_indices=this_fold[[j]]
+              for(k in 1:length(k_levels)){
+                 current_k=k_levels[k]
+                  current_fold=nn_classify_cv(dist_mat,as.vector(trainclass[[5]]),test_indices,k=current_k)
+                  accuracy=sum(trainclass[[5]][test_indices]==current_fold$prediction$predicted)/length(test_indices)
+                  tmp_trace=data.table(approach=approach_file_trace[m],repid=i,foldid=j,dataset=datasets[5],
+                               k=current_k,acc=accuracy)
+                  result_trace[[iter]]=tmp_trace
+                  iter=iter+1
+                
+             }
+            
+         }
+    
+      } 
+   }
+    
+
+overall_results_trace=rbindlist(result_trace)
+overall_results_trace[,list(avg_acc=mean(acc),sdev_acc=sd(acc),result_count=.N),by=list(approach,k)]
+
+```
+
+The Dynamic Time Warping distance measure has created better results.
+
+## BOX-PLOTS
+
+```{r,warning=FALSE}
+
+ggplot(overall_results_ecg,aes(x=paste0(approach,'+',k), y=acc)) +geom_boxplot()+ coord_flip() 
+ggplot(overall_results_cbf,aes(x=paste0(approach,'+',k), y=acc)) +geom_boxplot()+ coord_flip()
+ggplot(overall_results_ham,aes(x=paste0(approach,'+',k), y=acc)) +geom_boxplot()+ coord_flip()
+ggplot(overall_results_plane,aes(x=paste0(approach,'+',k), y=acc)) +geom_boxplot()+ coord_flip()
+ggplot(overall_results_trace,aes(x=paste0(approach,'+',k), y=acc)) +geom_boxplot()+ coord_flip()
+```
+

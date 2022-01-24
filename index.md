@@ -14,6 +14,12 @@ There will be several homework assignments done for this course.
 [Here](files/Ie48b-hw3.html) is the html file.
 [Code](files/Ie48b-hw3.Rmd)
 
+
+### Explainable Boosted Linear Regression Model for Solar Power Production
+[Here](files/Ie48b-last-hw.html) is the html file.
+[Code](files/Ie48b-last-hw.Rmd)
+
+
 ### Turkey electricity Market Project
 [Here](files/Ie48b-Project.html) is the project html file.
 [Code](files/Ie48b-Project.Rmd)

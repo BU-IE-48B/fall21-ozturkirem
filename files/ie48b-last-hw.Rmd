@@ -1,0 +1,330 @@
+---
+title: "ie48b-eblr"
+author: "Irem Ozturk"
+date: "24 01 2022"
+output: html_document
+---
+
+# Introduction
+
+Here is the plot of the hourly series
+
+```{r setup, include=F, warning=F}
+
+library(data.table)
+library(lubridate)
+library(forecast)
+library(ggplot2)
+library(rpart)
+library(rattle)
+
+
+weather <- read.csv("production_with_weather_data.csv", sep=",", header=T)
+weather <- data.table(weather)
+weather$date <- as.Date(weather$date)
+head(weather[,1:3], 24)
+weather[,trend:= 1:.N ]
+weather[,datetime:=ymd(date)+dhours(hour)]
+weather=weather[order(datetime)] #to be sure that the data is ordered
+
+ggplot(weather ,aes(x=datetime,y=production)) + geom_line()+ggtitle(label="Solar Power Production")
+
+
+oldnames = c("TMP_2.m.above.ground_38_35","TMP_2.m.above.ground_38_35.25","TMP_2.m.above.ground_38_35.5","TMP_2.m.above.ground_38_35.75",
+             "TMP_2.m.above.ground_38_36","TMP_2.m.above.ground_38.25_35","TMP_2.m.above.ground_38.25_35.25","TMP_2.m.above.ground_38.25_35.5",
+             "TMP_2.m.above.ground_38.25_35.75","TMP_2.m.above.ground_38.25_36","TMP_2.m.above.ground_38.5_35","TMP_2.m.above.ground_38.5_35.25",
+             "TMP_2.m.above.ground_38.5_35.5","TMP_2.m.above.ground_38.5_35.75","TMP_2.m.above.ground_38.5_36","TMP_2.m.above.ground_38.75_35",
+             "TMP_2.m.above.ground_38.75_35.25","TMP_2.m.above.ground_38.75_35.5","TMP_2.m.above.ground_38.75_35.75","TMP_2.m.above.ground_38.75_36",
+             "TMP_2.m.above.ground_39_35","TMP_2.m.above.ground_39_35.25","TMP_2.m.above.ground_39_35.5","TMP_2.m.above.ground_39_35.75","TMP_2.m.above.ground_39_36")
+
+names = c("TMP_38_35", "TMP_38_35.25", "TMP_38_35.5", "TMP_38_35.75",
+          "TMP_38_36", "TMP_38.25_35", "TMP_38.25_35.25", "TMP_38.25_35.5",
+          "TMP_38.25_35.75", "TMP_38.25_36", "TMP_38.5_35", "TMP_38.5_35.25",
+          "TMP_38.5_35.5","TMP_38.5_35.75", "TMP_38.5_36", "TMP_38.75_35",
+          "TMP_38.75_35.25", "TMP_38.75_35.5", "TMP_38.75_35.75", "TMP_38.75_36",
+          "TMP_39_35", "TMP_39_35.25", "TMP_39_35.5", "TMP_39_35.75", "TMP_39_36")
+
+setnames(weather,oldnames, names)
+
+oldnames1 = c("DSWRF_surface_38_35","DSWRF_surface_38_35.25","DSWRF_surface_38_35.5","DSWRF_surface_38_35.75",
+             "DSWRF_surface_38_36","DSWRF_surface_38.25_35","DSWRF_surface_38.25_35.25","DSWRF_surface_38.25_35.5",
+             "DSWRF_surface_38.25_35.75","DSWRF_surface_38.25_36","DSWRF_surface_38.5_35","DSWRF_surface_38.5_35.25",
+             "DSWRF_surface_38.5_35.5","DSWRF_surface_38.5_35.75","DSWRF_surface_38.5_36","DSWRF_surface_38.75_35",
+             "DSWRF_surface_38.75_35.25","DSWRF_surface_38.75_35.5","DSWRF_surface_38.75_35.75","DSWRF_surface_38.75_36",
+             "DSWRF_surface_39_35","DSWRF_surface_39_35.25","DSWRF_surface_39_35.5","DSWRF_surface_39_35.75","DSWRF_surface_39_36")
+
+names1 = c("DSWRF_38_35", "DSWRF_38_35.25", "DSWRF_38_35.5", "DSWRF_38_35.75",
+          "DSWRF_38_36", "DSWRF_38.25_35", "DSWRF_38.25_35.25", "DSWRF_38.25_35.5",
+          "DSWRF_38.25_35.75", "DSWRF_38.25_36", "DSWRF_38.5_35", "DSWRF_38.5_35.25",
+          "DSWRF_38.5_35.5","DSWRF_38.5_35.75", "DSWRF_38.5_36", "DSWRF_38.75_35",
+          "DSWRF_38.75_35.25", "DSWRF_38.75_35.5", "DSWRF_38.75_35.75", "DSWRF_38.75_36",
+          "DSWRF_39_35", "DSWRF_39_35.25", "DSWRF_39_35.5", "DSWRF_39_35.75", "DSWRF_39_36")
+
+setnames(weather,oldnames1, names1)
+
+
+
+```
+
+```{r include=FALSE}
+wmape <- function(actual, predicted){
+  return(sum(abs(actual - predicted)) / sum(abs(actual)))
+}
+
+```
+
+And this is the aggregated series (daily)
+
+```{r}
+daily_series=weather[,list(avg_production=mean(production)),by=list(date)]
+head(daily_series)
+daily_series[,date:=as.Date(date)]
+
+ggplot(daily_series ,aes(x=date,y=avg_production)) + geom_line()+ ggtitle(label="Daily Average Solar Power Production ")
+
+```
+
+# Models
+
+## Base Model - Linear Regression
+base model is built with a trend and the hour information as a factor.
+
+```{r }
+lm_base<-lm(production~trend+as.factor(hour),weather)
+summary(lm_base)
+
+```
+
+
+As can be seen above, night hours are not significant for the model which is obvious. Also, adjusted R-squared= 0.7793.
+Here are some plots regarding some days to compare actual and predicted values.
+
+```{r pressure, echo=FALSE}
+tmp=copy(weather)
+tmp[,actual:=production]
+tmp[,predicted:=predict(lm_base,tmp)]
+
+ggplot(tmp[date=='2019-09-01'] ,aes(x=datetime)) +
+  geom_line(aes(y=actual,color='real')) + 
+  geom_line(aes(y=predicted,color='predicted')) +ggtitle(label="Actual vs. Predicted at 2019-09-01")
+
+ggplot(tmp[date=='2021-12-24'] ,aes(x=datetime)) +
+  geom_line(aes(y=actual,color='real')) + 
+  geom_line(aes(y=predicted,color='predicted'))+ggtitle(label="Actual vs. Predicted at 2021-12-24")
+
+
+
+tmp[,residual:=actual-predicted]
+
+```
+
+## Linear Regression with Temperature and Shortwave Radiation
+
+```{r }
+lm_base_deneme=lm(production~trend+as.factor(hour)+DSWRF_38_35+DSWRF_38_35.25+DSWRF_38_35.5+DSWRF_38_35.75+
+                            DSWRF_38_36+DSWRF_38.25_35+DSWRF_38.25_35.25+DSWRF_38.25_35.5+
+                            DSWRF_38.25_35.75+DSWRF_38.25_36+DSWRF_38.5_35+DSWRF_38.5_35.25+
+                            DSWRF_38.5_35.5+DSWRF_38.5_35.75+DSWRF_38.5_36+DSWRF_38.75_35+
+                            DSWRF_38.75_35.25+DSWRF_38.75_35.5+DSWRF_38.75_35.75+DSWRF_38.75_36+
+                            DSWRF_39_35+DSWRF_39_35.25+DSWRF_39_35.5+DSWRF_39_35.75+DSWRF_39_36+
+                            TMP_38_35+TMP_38_35.25+TMP_38_35.5+TMP_38_35.75+
+                            TMP_38_36+TMP_38.25_35+TMP_38.25_35.25+TMP_38.25_35.5+
+                            TMP_38.25_35.75+TMP_38.25_36+TMP_38.5_35+TMP_38.5_35.25+
+                            TMP_38.5_35.5+TMP_38.5_35.75+TMP_38.5_36+TMP_38.75_35+
+                            TMP_38.75_35.25+TMP_38.75_35.5+TMP_38.75_35.75+TMP_38.75_36+
+                            TMP_39_35+TMP_39_35.25+TMP_39_35.5+TMP_39_35.75+TMP_39_36,weather)
+summary(lm_base_deneme)
+
+```
+
+Adjusted R squared has improved.The information about some locations are insignificant for the model.
+
+## Explainable Boosted Linear Regression Model 1
+
+Now we are going to try to elaborete this model and improve the adjusted R-squared value
+To do that explainable boosted linear regression with depth 4 will be used. As a factor temperature data for the 25 different coordinates has used. Here is the regression tree:
+
+
+```{r}
+fit_res_tree=rpart(residual~TMP_38_35+TMP_38_35.25+TMP_38_35.5+TMP_38_35.75+
+                            TMP_38_36+TMP_38.25_35+TMP_38.25_35.25+TMP_38.25_35.5+
+                            TMP_38.25_35.75+TMP_38.25_36+TMP_38.5_35+TMP_38.5_35.25+
+                            TMP_38.5_35.5+TMP_38.5_35.75+TMP_38.5_36+TMP_38.75_35+
+                            TMP_38.75_35.25+TMP_38.75_35.5+TMP_38.75_35.75+TMP_38.75_36+
+                            TMP_39_35+TMP_39_35.25+TMP_39_35.5+TMP_39_35.75+TMP_39_36+
+                            hour,tmp,control=rpart.control(cp=0,maxdepth=4))
+
+fancyRpartPlot(fit_res_tree)
+
+```
+
+the biggest error has shown in box 31 as 58. So, we need to track the path and add some new variables. after that second model can bu created. Results:
+
+```{r}
+tmp[,tm_gt:=as.numeric(TMP_38_36>296)]
+
+tmp[,tm_gt2:=as.numeric(TMP_38_35.25>=290)]
+tmp[,hour_ls:=as.numeric(hour<18)]
+
+lm_basev2=lm(production~trend+as.factor(hour)+tm_gt:tm_gt2:hour_ls,tmp)
+summary(lm_basev2)
+
+tmp[,predicted2:=predict(lm_basev2,tmp)]
+```
+
+As we can see R squared values has improved significantly compared to base model. Here are the plots demonstrating the same days above:
+
+
+```{r}
+
+ggplot(tmp[date=='2019-09-01'] ,aes(x=datetime)) +
+  geom_line(aes(y=actual,color='real')) + 
+  geom_line(aes(y=predicted2,color='predicted'))
+
+ggplot(tmp[date=='2021-12-24'] ,aes(x=datetime)) +
+  geom_line(aes(y=actual,color='real')) + 
+  geom_line(aes(y=predicted2,color='predicted'))
+```
+
+
+## Explainable Boosted Linear Regression Model 2
+
+ As a factor temperature data for the 25 different coordinates has used. Here is the regression tree:
+
+
+```{r}
+
+fit_res_tree2=rpart(residual~DSWRF_38_35+DSWRF_38_35.25+DSWRF_38_35.5+DSWRF_38_35.75+
+                            DSWRF_38_36+DSWRF_38.25_35+DSWRF_38.25_35.25+DSWRF_38.25_35.5+
+                            DSWRF_38.25_35.75+DSWRF_38.25_36+DSWRF_38.5_35+DSWRF_38.5_35.25+
+                            DSWRF_38.5_35.5+DSWRF_38.5_35.75+DSWRF_38.5_36+DSWRF_38.75_35+
+                            DSWRF_38.75_35.25+DSWRF_38.75_35.5+DSWRF_38.75_35.75+DSWRF_38.75_36+
+                            DSWRF_39_35+DSWRF_39_35.25+DSWRF_39_35.5+DSWRF_39_35.75+DSWRF_39_36+
+                            TMP_38_35+TMP_38_35.25+TMP_38_35.5+TMP_38_35.75+
+                            TMP_38_36+TMP_38.25_35+TMP_38.25_35.25+TMP_38.25_35.5+
+                            TMP_38.25_35.75+TMP_38.25_36+TMP_38.5_35+TMP_38.5_35.25+
+                            TMP_38.5_35.5+TMP_38.5_35.75+TMP_38.5_36+TMP_38.75_35+
+                            TMP_38.75_35.25+TMP_38.75_35.5+TMP_38.75_35.75+TMP_38.75_36+
+                            TMP_39_35+TMP_39_35.25+TMP_39_35.5+TMP_39_35.75+TMP_39_36+
+                            hour,tmp,control=rpart.control(cp=0,maxdepth=4))
+
+fancyRpartPlot(fit_res_tree2)
+```
+
+Box 16 indicates error -55 for the 10% of the data. So, new feature will be added to the base model to cover this error.
+
+
+```{r}
+tmp[,tm_gt3:=as.numeric(DSWRF_39_35.25<586)]
+
+tmp[,tm_gt4:=as.numeric(TMP_38_35.75<282)]
+tmp[,tm_gt5:=as.numeric(DSWRF_38_35>=138)]
+
+tmp[,hour_ls2:=as.numeric(hour<17)]
+
+lm_basev3=lm(production~trend+as.factor(hour)+tm_gt3:tm_gt4:tm_gt5:hour_ls2,tmp)
+summary(lm_basev3)
+
+tmp[,predicted3:=predict(lm_basev3,tmp)]
+```
+
+Adjusted R^2 is better than EBLR model 1. 
+
+```{r}
+
+ggplot(tmp[date=='2019-09-01'] ,aes(x=datetime)) +
+  geom_line(aes(y=actual,color='real')) + 
+  geom_line(aes(y=predicted3,color='predicted'))
+
+ggplot(tmp[date=='2021-12-24'] ,aes(x=datetime)) +
+  geom_line(aes(y=actual,color='real')) + 
+  geom_line(aes(y=predicted3,color='predicted'))
+```
+
+## combination of Models
+
+```{r }
+lm_combine=lm(production~trend+as.factor(hour)+DSWRF_38_35+DSWRF_38_35.25+DSWRF_38_35.5+DSWRF_38_35.75+
+                            DSWRF_38_36+DSWRF_38.25_35+DSWRF_38.25_35.25+DSWRF_38.25_35.5+
+                            DSWRF_38.25_35.75+DSWRF_38.25_36+DSWRF_38.5_35+DSWRF_38.5_35.25+
+                            DSWRF_38.5_35.5+DSWRF_38.5_35.75+DSWRF_38.5_36+DSWRF_38.75_35+
+                            DSWRF_38.75_35.25+DSWRF_38.75_35.5+DSWRF_38.75_35.75+DSWRF_38.75_36+
+                            DSWRF_39_35+DSWRF_39_35.25+DSWRF_39_35.5+DSWRF_39_35.75+DSWRF_39_36+
+                            TMP_38_35+TMP_38_35.25+TMP_38_35.5+TMP_38_35.75+
+                            TMP_38_36+TMP_38.25_35+TMP_38.25_35.25+TMP_38.25_35.5+
+                            TMP_38.25_35.75+TMP_38.25_36+TMP_38.5_35+TMP_38.5_35.25+
+                            TMP_38.5_35.5+TMP_38.5_35.75+TMP_38.5_36+TMP_38.75_35+
+                            TMP_38.75_35.25+TMP_38.75_35.5+TMP_38.75_35.75+TMP_38.75_36+
+                            TMP_39_35+TMP_39_35.25+TMP_39_35.5+TMP_39_35.75+TMP_39_36+tm_gt3:tm_gt4:tm_gt5:hour_ls2,tmp)
+summary(lm_combine)
+
+tmp[,predicted_combined:=predict(lm_combine,tmp)]
+
+```
+
+Adjusted R^2 is slightly better than linear regression with temperature and the downward radiation.
+Here is the plots for the same days.
+
+```{r}
+
+ggplot(tmp[date=='2019-09-01'] ,aes(x=datetime)) +
+  geom_line(aes(y=actual,color='real')) + 
+  geom_line(aes(y=predicted_combined,color='predicted'))
+
+ggplot(tmp[date=='2021-12-24'] ,aes(x=datetime)) +
+  geom_line(aes(y=actual,color='real')) + 
+  geom_line(aes(y=predicted_combined,color='predicted'))
+```
+
+# Conclusion
+
+Here is the final table that shows the predicted values with 4 models explained before and the the lagged values.
+
+```{r}
+weather[, lagged:= shift(weather$production, n=48, fill=NA)]
+
+last_table <- data.table(date=weather$date, hour=weather$hour, production=weather$production, lagg_48=weather$lagged, base_predicted=tmp$predicted, reg_tree_predicted1=tmp$predicted2,reg_tree_predicted2=tmp$predicted3,combined_predicted=tmp$predicted_combined)
+tail(last_table, 24)
+
+
+
+
+```
+```{r}
+
+wmape_baseline=wmape(last_table$production[49:length(last_table$production)], last_table$lagg_48[49:length(last_table$production)])
+wmape_baseline
+
+```
+
+```{r}
+wmape_base_model=wmape(last_table$production[49:length(last_table$production)], last_table$base_predicted[49:length(last_table$production)])
+wmape_base_model
+```
+
+```{r}
+wmape_eblr1=wmape(last_table$production[!is.na(last_table$reg_tree_predicted1)], na.omit(last_table$reg_tree_predicted1))
+wmape_eblr1
+
+```
+
+```{r}
+wmape_eblr2=wmape(last_table$production[!is.na(last_table$reg_tree_predicted2)], na.omit(last_table$reg_tree_predicted2))
+wmape_eblr2
+
+```
+
+```{r}
+wmape_combined=wmape(last_table$production[!is.na(last_table$combined_predicted)], na.omit(last_table$combined_predicted))
+wmape_combined
+
+```
+
+As a result combined model is not working as well as the baseline. However, this can be changed by using lagged factors in the model because the data is auto-correlated. Here is the acf plot. Daily seasonality and the significance of the lag 1,2 can be seen from it.
+
+```{r}
+acf(weather$production)
+```
+
+
+

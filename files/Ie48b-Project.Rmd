@@ -1,0 +1,281 @@
+---
+title: "IE48B - Project"
+author: "Alihan Zer - İrem Öztürk"
+date: "23 01 2022"
+output: html_document
+---
+
+# Introduction
+
+## Problem Definition
+
+The aim of this project is making predictions of imbalance for Turkish Electricity Market. Predicting process directions is important for the intraday market. This is necessary because day-ahead forecasts are rarely perfect due to changes in weather conditions, special events etc. So, demand/production ratio is not constant which results in excess demand or supply surplus. At either case, intraday market may help companies to resolve "imbalance" problems. However, this is not always the case. When imbalance problem occurs, EPİAŞ penalizes the imbalance. To avoid that predicting intraday imbalance is crucial.
+
+
+```{r include=FALSE}
+require(ggplot2)
+require(skimr)
+require(GGally)
+require(data.table)
+require(lubridate)
+library(forecast)
+require(rpart)
+require(rattle)
+require(readr)
+
+```
+
+```{r include=FALSE}
+wmape <- function(actual, predicted){
+  return(sum(abs(actual - predicted)) / sum(abs(actual)))
+}
+
+```
+
+## Model Approach
+
+To design the model, bulk imbalance data from EPİAŞ is provided. Model is based on net imbalance data which is total of upRegulationsDelivered and the downRegulationDelivered information.
+
+Explainable boosted linear regression is used with additional factors like temperature, wind speed and the percentage of cloud cover. According to forecasted values, process direction is found. After improving the model, it is compared with two baselines, discussed in following sections.
+
+## Data Visualization
+
+To start with, the data needed to be read and visualized. As stated previously, the "bulk_imbalance" data set was used. There were a couple of meaningful features in this data sets; however, additional feature generation was required to perform upcoming analyzes.
+
+Since this data was time dependent, several time related feautures needed to be added, such as trend, days, months, and the date.
+
+```{r}
+bulk_imbalance = fread("bulk_imbalance.csv")
+bulk_imbalance = data.table(bulk_imbalance)
+bulk_imbalance[,trend:=1:.N]
+bulk_imbalance[,datetime:=ymd(date) + dhours(hour)]
+bulk_imbalance[,w_day:=as.character(wday(datetime))]
+bulk_imbalance[,mon:=as.character(month(datetime))]
+```
+
+Here is the tableau that contains the last 24 hours.
+
+```{r}
+bulk_table = bulk_imbalance[,.(datetime, net, upRegulationDelivered, downRegulationDelivered, system_direction)]
+head(bulk_table, 24)
+```
+
+```{r}
+ggplot(bulk_imbalance, aes(datetime, net, color = system_direction)) + geom_line() + ggtitle(label = "Bulk Imbalance - Net")
+```
+
+# Models
+
+## Model 1
+
+For the first model, newly added features were used in the linear regression model.
+
+```{r}
+lm_base <- lm(net~trend+ w_day + mon + as.factor(hour), bulk_imbalance)
+summary(lm_base)
+```
+
+As it can be seen from the Adjusted R-squared value (0.1081), the model was underfitting. The plot below also shows that predictions were not sufficient enough.
+
+
+```{r}
+bulk_imbalance[, predicted:= ((predict(lm_base, bulk_imbalance)))]
+ggplot(data = bulk_imbalance, aes(x=datetime, y=net)) + geom_line(aes(y = net, color = 'net'))+geom_line(aes(y=predicted, color = 'predicted')) + ggtitle("Linear Regression Base")
+
+```
+
+This plot shows the predictions and the actual values for a randomly selected day.
+
+```{r}
+ggplot(data = bulk_imbalance[date == '2020-06-10',], aes(x=datetime, y=net)) + geom_line(aes(y = net, color = 'net'))+geom_line(aes(y=predicted, color = 'predicted'))+ ggtitle("Linear Regression Base for 2020-06-10")
+```
+
+## Model 2
+
+For this model, the weather information was used. More specifically, the surface temperature, cloud cover, and the wind speed was used. The reason for these selections is that, the surface temperature may affect the demand. The cloud cover and the wind speed may affect the electricity production. For the sake of simplicity, only the coordinates lat = 36.5 and lon = 32.5 were selected.
+
+```{r}
+weather = fread("2022-01-22_weather.csv")
+tempweather = weather[variable == 'TMP_2.m.above.ground',]
+tempweather = tempweather[date>="2019-01-01",]
+tempweather = tempweather[date<="2022-01-22",]
+tempweather = tempweather[lat == 36.5,]
+tempweather = tempweather[lon == 32.5,]
+
+tail(tempweather, 24)
+```
+
+```{r}
+tempweather1 = weather[variable == 'TCDC_low.cloud.layer',]
+tempweather1 = tempweather1[date>="2019-01-01",]
+tempweather1 = tempweather1[date<="2022-01-22",]
+tempweather1 = tempweather1[lat == 36.5,]
+tempweather1 = tempweather1[lon == 32.5,]
+tail(tempweather1, 24)
+```
+
+```{r}
+tempweather2 = weather[variable == 'ws_10m',]
+tempweather2 = tempweather2[date>="2019-01-01",]
+tempweather2 = tempweather2[date<="2022-01-22",]
+tempweather2 = tempweather2[lat == 36.5,]
+tempweather2 = tempweather2[lon == 32.5,]
+tail(tempweather2, 24)
+```
+
+```{r}
+bulk_imbalance$temperature = tempweather$value
+bulk_imbalance$cloud = tempweather1$value
+bulk_imbalance$wind = tempweather2$value
+
+lm_base2 <- lm(net~trend+ w_day + mon + as.factor(hour) + temperature + cloud + wind, bulk_imbalance)
+summary(lm_base2)
+```
+
+The weather additions were significant; however, it is far from sufficient with the adjusted R^2 = 0.1104. In order to analyze further, the autocorrelation of this data set should be examined.
+
+## Model 3
+
+```{r}
+acf(bulk_imbalance$net)
+shifted1 = shift(bulk_imbalance$net, 1)
+shifted2 = shift(bulk_imbalance$net, 2)
+shifted3 = shift(bulk_imbalance$net, 3)
+shifted24 = shift(bulk_imbalance$net, 24)
+
+bulk_imbalance$shifted1 = shifted1
+bulk_imbalance$shifted2 = shifted2
+bulk_imbalance$shifted3 = shifted3
+bulk_imbalance$shifted24 = shifted24
+```
+
+As can be seen from the autocorrelation plot lag 1, 2, 3 and 24 can be significant for the design of the model. Also, this shows that there is daily seasonality in the data, which is expected. After adding lag 1, 2, 3 and 24, here is the summary of regression model.
+
+
+```{r}
+
+lm_base3 <- lm(net~trend+ w_day + mon + as.factor(hour) + temperature + cloud + wind + shifted1 + shifted2 + shifted3 + shifted24, bulk_imbalance)
+summary(lm_base3)
+```
+
+Adjusted R^2 value, 0.8487 has improved significantly. In addition, lag 1, lag 2 and lag 24 is significant. So, after deleting the insignificant factor, regression tree may help for further feature addition.
+
+## Model 4
+
+### Regression Tree:
+
+```{r}
+fit_res_tree = rpart(net~(trend + as.factor(hour) + w_day + shifted24 + shifted1 + shifted2 + temperature + cloud), control = rpart.control(maxdepth = 3), data = bulk_imbalance)
+fancyRpartPlot(fit_res_tree)
+```
+
+Box 13 is selected due to its high number of errors. Thus, new features were generated as such:
+
+```{r}
+bulk_imbalance[, s1 := shifted1 >= 534]
+bulk_imbalance[, s2 := shifted1 < 2432]
+bulk_imbalance[, s3 := shifted1 >= 1233]
+```
+
+After generating the final features, now the test data set can be obtained from the original table.
+
+```{r}
+test_data = head(tail(bulk_imbalance, 24),9)
+bulk_imbalance = bulk_imbalance[1:(length(bulk_imbalance$net) - 24)]
+
+lm_base4 <- lm(net~trend+ w_day + as.factor(hour) + shifted1 + shifted2 + shifted24  + s1:s2:s3 + temperature + cloud, bulk_imbalance)
+summary(lm_base4)
+```
+
+The adjusted R-squared value is 0.8493, which is larger compared to the previous models. These plots can be used for further visualizations regarding the success of the model
+
+```{r message=FALSE, warning=FALSE}
+bulk_imbalance[, predicted:= ((predict(lm_base4, bulk_imbalance)))]
+ggplot(data = bulk_imbalance, aes(x=datetime, y=net)) + geom_line(aes(y = net, color = 'net'))+geom_line(aes(y=predicted, color = 'predicted')) + ggtitle("Linear Regression - 4")
+
+```
+
+This plot shows the predictions and the actual values for a randomly selected day.
+
+```{r}
+ggplot(data = bulk_imbalance[date == '2020-06-10',], aes(x=datetime, y=net)) + geom_line(aes(y = net, color = 'net'))+geom_line(aes(y=predicted, color = 'predicted'))+ ggtitle("Linear Regression - 4 for 2020-06-10")
+```
+
+# Baselines
+
+## Baseline - 1
+
+The first baseline suggests to use the direction of the previous week, hence the lag 168.
+
+```{r}
+shifted168 = shift(bulk_imbalance$net, 168)
+bulk_imbalance$shifted168 <- shifted168
+
+```
+
+```{r}
+ggplot(data = bulk_imbalance, aes(x=datetime, y=net)) + geom_line(aes(y = net, color = 'net'))+geom_line(aes(y=shifted168, color = 'Lag 168')) + ggtitle("Baseline 1")
+```
+
+## Baseline - 2
+
+The second baseline suggests to use the direction of the previous day, hence the lag 24. Since lag 24 was previously added into the model, visualizing the lag 24 will be sufficient enough.
+
+```{r}
+ggplot(data = bulk_imbalance, aes(x=datetime, y=net)) + geom_line(aes(y = net, color = 'net'))+geom_line(aes(y=shifted24, color = 'Lag 24')) + ggtitle("Baseline 2")
+```
+
+# Conclusion
+
+WMAPE (weighted mean absolute percentage error) was used to measure errors. The results indicate that the linear regression model performs best.
+
+```{r}
+
+wmape(bulk_imbalance$net[25:length(bulk_imbalance$net)],bulk_imbalance$predicted[25:length(bulk_imbalance$net)])
+
+```
+
+```{r}
+wmape(bulk_imbalance$net[25:length(bulk_imbalance$net)],bulk_imbalance$shifted24[25:length(bulk_imbalance$net)])
+```
+
+```{r}
+wmape(bulk_imbalance$net[169:length(bulk_imbalance$net)],bulk_imbalance$shifted168[169:length(bulk_imbalance$net)])
+```
+
+# Predictions
+
+```{r}
+
+preds = predict(lm_base4, newdata = test_data)
+wmape(test_data$net, preds)
+```
+
+
+```{r}
+
+test_data[preds>=50, pred_class:="Positive"]
+test_data[preds<=-50, pred_class:="Negative"]
+test_data[preds<50 && preds>-50, pred_class:="Neutral"]
+
+test_data[net>=50, actual_class:="Positive"]
+test_data[net<=-50, actual_class:="Negative"]
+test_data[net<50 && net>-50, actual_class:="Neutral"]
+
+results_table = test_data[,.(datetime, net, preds, actual_class, pred_class)]
+results_table
+```
+
+### Success rate calculation
+
+```{r}
+inc = 0
+for(i in (1:9)){
+  if(results_table$actual_class[i] == results_table$pred_class[i]){
+    inc = inc + 1
+  }
+}
+inc/9
+```
+
+
